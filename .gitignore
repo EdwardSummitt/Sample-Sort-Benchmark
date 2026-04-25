@@ -1,2 +1,15 @@
 build/
 vcpkg_installed/
+
+# Python virtual environment and cache files
+.venv/
+__pycache__/
+*.pyc
+
+# Python packaging/build artifacts
+*.egg-info/
+dist/
+build_python/
+
+*.png
+*.csv
