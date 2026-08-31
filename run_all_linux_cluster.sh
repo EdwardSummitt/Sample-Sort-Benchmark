@@ -97,10 +97,11 @@ log "Installing Python requirements"
 ./.venv/bin/python -m pip install --upgrade pip
 ./.venv/bin/python -m pip install -r requirements.txt
 
-log "Running benchmark sweep and 3D plot generation"
+log "Running benchmark sweep and speed plot generation"
 ./.venv/bin/python ./plot_thread_size_surface.py --exe "${EXE_PATH}" "$@"
 
 log "Done. Outputs written in repo root:"
 echo "  - benchmark_raw_trials.csv"
 echo "  - benchmark_median_summary.csv"
-echo "  - benchmark_3d_surface.png"
+echo "  - benchmark_speed_vs_size.png"
+echo "  - benchmark_speed_vs_threads.png"

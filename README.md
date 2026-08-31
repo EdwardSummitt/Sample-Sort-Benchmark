@@ -51,11 +51,10 @@ Use the Python script below to run the benchmark binary across:
 - Input sizes: 9 increments from 1,000,000 to 48,000,000
 - Trials per (core, size) pair: 5
 
-The script computes median runtime from trial samples and produces a 3D surface:
+The script computes median speed (elements sorted per ms) from trial samples and produces two line plots:
 
-- X axis: cores
-- Y axis: input size
-- Z axis: median time (ms)
+- `benchmark_speed_vs_size.png`: X axis is input size, Y axis is median speed, one line per thread count.
+- `benchmark_speed_vs_threads.png`: X axis is thread count, Y axis is median speed, one line per input size.
 
 ### Example (Windows PowerShell)
 
@@ -73,11 +72,12 @@ Outputs:
 
 - `benchmark_raw_trials.csv`
 - `benchmark_median_summary.csv`
-- `benchmark_3d_surface.png`
+- `benchmark_speed_vs_size.png`
+- `benchmark_speed_vs_threads.png`
 
 ## One-Shot Linux Cluster Script
 
-Run everything (vcpkg bootstrap, CMake build, Python venv setup, benchmark sweep, 3D plot) with one command:
+Run everything (vcpkg bootstrap, CMake build, Python venv setup, benchmark sweep, speed plots) with one command:
 
 ```bash
 chmod +x ./run_all_linux_cluster.sh

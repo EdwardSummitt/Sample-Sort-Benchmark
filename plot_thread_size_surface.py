@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run HPX benchmark sweeps and generate a 3D median-time plot.
+"""Run HPX benchmark sweeps and generate median-speed line plots.
 
 This script runs the benchmark executable across a fixed thread-count list and
 input-size list, performs 5 trials per combination, computes the median from
@@ -7,7 +7,8 @@ raw trial samples, and writes:
 
 1) raw trial CSV
 2) median summary CSV
-3) 3D surface plot image
+3) speed-vs-size line plot (one line per thread count)
+4) speed-vs-threads line plot (one line per input size)
 """
 
 from __future__ import annotations
@@ -20,7 +21,6 @@ import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 
 THREAD_COUNTS = [1, 2, 4, 8, 16, 17, 18, 19, 20]
@@ -38,7 +38,7 @@ INPUT_SIZES = [
     48_000_000,
 ]
 
-CSV_HEADER = "name,trial_idx,trial_ms,min_ms,median_ms,mean_ms,max_ms"
+CSV_HEADER = "name,trial_idx,trial_speed,min_speed,median_speed,mean_speed,max_speed"
 
 
 def resolve_default_executable() -> Path:
@@ -109,26 +109,26 @@ def run_one_benchmark(
         )
 
     rows = extract_csv_rows(result.stdout)
-    trial_times = [
-        float(row["trial_ms"])
+    trial_speeds = [
+        float(row["trial_speed"])
         for row in rows
-        if row.get("name") == algorithm_name and row.get("trial_ms")
+        if row.get("name") == algorithm_name and row.get("trial_speed")
     ]
 
-    if len(trial_times) != trials:
+    if len(trial_speeds) != trials:
         raise RuntimeError(
-            f"Expected {trials} trial rows for '{algorithm_name}', got {len(trial_times)} "
+            f"Expected {trials} trial rows for '{algorithm_name}', got {len(trial_speeds)} "
             f"for threads={threads}, size={size}."
         )
 
-    return trial_times
+    return trial_speeds
 
 
 def write_raw_csv(path: Path, rows: list[dict[str, float]]) -> None:
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["threads", "size", "trial_index", "trial_ms"],
+            fieldnames=["threads", "size", "trial_index", "trial_speed"],
         )
         writer.writeheader()
         writer.writerows(rows)
@@ -138,42 +138,53 @@ def write_median_csv(path: Path, rows: list[dict[str, float]]) -> None:
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["threads", "size", "median_ms"],
+            fieldnames=["threads", "size", "median_speed"],
         )
         writer.writeheader()
         writer.writerows(rows)
 
 
-def plot_surface(
+def plot_speed_vs_size(
     output_path: Path,
     thread_counts: list[int],
     input_sizes: list[int],
     medians_by_size_thread: list[list[float]],
 ) -> None:
-    x = np.array(thread_counts, dtype=float)
-    y = np.array(input_sizes, dtype=float)
-    x_grid, y_grid = np.meshgrid(x, y)
-    z_grid = np.array(medians_by_size_thread, dtype=float)
+    # medians_by_size_thread is indexed [size_idx][thread_idx]
+    fig, ax = plt.subplots(figsize=(10, 7))
 
-    fig = plt.figure(figsize=(11, 8))
-    ax = fig.add_subplot(111, projection="3d")
+    for thread_idx, threads in enumerate(thread_counts):
+        y = [medians_by_size_thread[size_idx][thread_idx] for size_idx in range(len(input_sizes))]
+        ax.plot(input_sizes, y, marker="o", label=f"{threads} threads")
 
-    surface = ax.plot_surface(
-        x_grid,
-        y_grid,
-        z_grid,
-        cmap="viridis",
-        linewidth=0,
-        antialiased=True,
-        alpha=0.95,
-    )
+    ax.set_xlabel("Input size (N)")
+    ax.set_ylabel("Median speed (elements/ms)")
+    ax.set_title("HPX Sample Sort Speed vs Input Size")
+    ax.legend(title="Cores (threads)")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=180)
+    plt.close(fig)
+
+
+def plot_speed_vs_threads(
+    output_path: Path,
+    thread_counts: list[int],
+    input_sizes: list[int],
+    medians_by_size_thread: list[list[float]],
+) -> None:
+    # medians_by_size_thread is indexed [size_idx][thread_idx]
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    for size_idx, size in enumerate(input_sizes):
+        y = medians_by_size_thread[size_idx]
+        ax.plot(thread_counts, y, marker="o", label=f"N={size:,}")
 
     ax.set_xlabel("Cores (threads)")
-    ax.set_ylabel("Input size (N)")
-    ax.set_zlabel("Median time (ms)")
-    ax.set_title("HPX Sample Sort Median Time Surface")
-
-    fig.colorbar(surface, shrink=0.65, pad=0.1, label="Median time (ms)")
+    ax.set_ylabel("Median speed (elements/ms)")
+    ax.set_title("HPX Sample Sort Speed vs Thread Count")
+    ax.legend(title="Input size")
+    ax.grid(True, alpha=0.3)
     fig.tight_layout()
     fig.savefig(output_path, dpi=180)
     plt.close(fig)
@@ -181,7 +192,7 @@ def plot_surface(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run core/input-size sweeps and generate 3D median runtime plot."
+        description="Run core/input-size sweeps and generate median speed line plots."
     )
     parser.add_argument(
         "--exe",
@@ -229,10 +240,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Output CSV for median per (threads,size).",
     )
     parser.add_argument(
-        "--plot",
+        "--plot-vs-size",
         type=Path,
-        default=Path("benchmark_3d_surface.png"),
-        help="Output PNG for 3D surface plot.",
+        default=Path("benchmark_speed_vs_size.png"),
+        help="Output PNG for speed-vs-input-size line plot (one line per thread count).",
+    )
+    parser.add_argument(
+        "--plot-vs-threads",
+        type=Path,
+        default=Path("benchmark_speed_vs_threads.png"),
+        help="Output PNG for speed-vs-thread-count line plot (one line per input size).",
     )
     return parser
 
@@ -264,7 +281,7 @@ def main() -> int:
                 flush=True,
             )
 
-            trial_times = run_one_benchmark(
+            trial_speeds = run_one_benchmark(
                 exe_path=exe_path,
                 threads=threads,
                 size=size,
@@ -276,16 +293,16 @@ def main() -> int:
                 hpx_bind_none=args.hpx_bind_none,
             )
 
-            median_ms = float(statistics.median(trial_times))
-            medians_for_size.append(median_ms)
+            median_speed = float(statistics.median(trial_speeds))
+            medians_for_size.append(median_speed)
 
-            for trial_index, trial_ms in enumerate(trial_times):
+            for trial_index, trial_speed in enumerate(trial_speeds):
                 raw_rows.append(
                     {
                         "threads": threads,
                         "size": size,
                         "trial_index": trial_index,
-                        "trial_ms": trial_ms,
+                        "trial_speed": trial_speed,
                     }
                 )
 
@@ -293,7 +310,7 @@ def main() -> int:
                 {
                     "threads": threads,
                     "size": size,
-                    "median_ms": median_ms,
+                    "median_speed": median_speed,
                 }
             )
 
@@ -301,12 +318,14 @@ def main() -> int:
 
     write_raw_csv(args.raw_csv, raw_rows)
     write_median_csv(args.median_csv, median_rows)
-    plot_surface(args.plot, THREAD_COUNTS, INPUT_SIZES, medians_by_size_thread)
+    plot_speed_vs_size(args.plot_vs_size, THREAD_COUNTS, INPUT_SIZES, medians_by_size_thread)
+    plot_speed_vs_threads(args.plot_vs_threads, THREAD_COUNTS, INPUT_SIZES, medians_by_size_thread)
 
     print("\nFinished benchmark sweep.")
-    print(f"Raw trials CSV : {args.raw_csv}")
-    print(f"Median CSV     : {args.median_csv}")
-    print(f"3D plot PNG    : {args.plot}")
+    print(f"Raw trials CSV      : {args.raw_csv}")
+    print(f"Median CSV          : {args.median_csv}")
+    print(f"Speed vs size plot  : {args.plot_vs_size}")
+    print(f"Speed vs threads plot: {args.plot_vs_threads}")
 
     return 0
 

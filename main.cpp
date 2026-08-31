@@ -40,11 +40,11 @@ namespace
     struct benchmark_summary
     {
         std::string name;
-        std::vector<double> trial_ms;
-        double min_ms = 0.0;
-        double max_ms = 0.0;
-        double mean_ms = 0.0;
-        double median_ms = 0.0;
+        std::vector<double> trial_speed;
+        double min_speed = 0.0;
+        double max_speed = 0.0;
+        double mean_speed = 0.0;
+        double median_speed = 0.0;
     };
 
     std::string parse_os_threads_arg(int argc, char* argv[])
@@ -124,7 +124,8 @@ namespace
     {
         benchmark_summary summary;
         summary.name = std::move(name);
-        summary.trial_ms.reserve(static_cast<std::size_t>(trials));
+        summary.trial_speed.reserve(static_cast<std::size_t>(trials));
+        auto const size = static_cast<double>(base_input.size());
 
         for (int i = 0; i < warmup; ++i)
         {
@@ -150,25 +151,26 @@ namespace
             }
 
             std::chrono::duration<double, std::milli> const elapsed = end - start;
-            summary.trial_ms.push_back(elapsed.count());
+            // elements sorted per millisecond: higher is faster
+            summary.trial_speed.push_back(size / elapsed.count());
         }
 
-        summary.min_ms = *std::min_element(summary.trial_ms.begin(), summary.trial_ms.end());
-        summary.max_ms = *std::max_element(summary.trial_ms.begin(), summary.trial_ms.end());
-        summary.mean_ms =
-            std::accumulate(summary.trial_ms.begin(), summary.trial_ms.end(), 0.0) /
-            static_cast<double>(summary.trial_ms.size());
+        summary.min_speed = *std::min_element(summary.trial_speed.begin(), summary.trial_speed.end());
+        summary.max_speed = *std::max_element(summary.trial_speed.begin(), summary.trial_speed.end());
+        summary.mean_speed =
+            std::accumulate(summary.trial_speed.begin(), summary.trial_speed.end(), 0.0) /
+            static_cast<double>(summary.trial_speed.size());
 
-        std::vector<double> sorted = summary.trial_ms;
+        std::vector<double> sorted = summary.trial_speed;
         std::sort(sorted.begin(), sorted.end());
         auto const mid = sorted.size() / 2;
         if (sorted.size() % 2 == 0)
         {
-            summary.median_ms = (sorted[mid - 1] + sorted[mid]) / 2.0;
+            summary.median_speed = (sorted[mid - 1] + sorted[mid]) / 2.0;
         }
         else
         {
-            summary.median_ms = sorted[mid];
+            summary.median_speed = sorted[mid];
         }
 
         return summary;
@@ -178,31 +180,31 @@ namespace
     {
         std::cout << std::fixed << std::setprecision(3);
         std::cout << summary.name << "\n";
-        std::cout << "  trials(ms): ";
-        for (std::size_t i = 0; i < summary.trial_ms.size(); ++i)
+        std::cout << "  trials(elements/ms): ";
+        for (std::size_t i = 0; i < summary.trial_speed.size(); ++i)
         {
-            std::cout << summary.trial_ms[i];
-            if (i + 1 < summary.trial_ms.size())
+            std::cout << summary.trial_speed[i];
+            if (i + 1 < summary.trial_speed.size())
             {
                 std::cout << ", ";
             }
         }
         std::cout << "\n";
-        std::cout << "  min/median/mean/max(ms): " << summary.min_ms << " / "
-                  << summary.median_ms << " / " << summary.mean_ms << " / "
-                  << summary.max_ms << "\n";
+        std::cout << "  min/median/mean/max(elements/ms): " << summary.min_speed << " / "
+                  << summary.median_speed << " / " << summary.mean_speed << " / "
+                  << summary.max_speed << "\n";
     }
 
     void print_csv(std::vector<benchmark_summary> const& all)
     {
-        std::cout << "name,trial_idx,trial_ms,min_ms,median_ms,mean_ms,max_ms\n";
+        std::cout << "name,trial_idx,trial_speed,min_speed,median_speed,mean_speed,max_speed\n";
         for (auto const& summary : all)
         {
-            for (std::size_t i = 0; i < summary.trial_ms.size(); ++i)
+            for (std::size_t i = 0; i < summary.trial_speed.size(); ++i)
             {
-                std::cout << summary.name << ',' << i << ',' << summary.trial_ms[i]
-                          << ',' << summary.min_ms << ',' << summary.median_ms << ','
-                          << summary.mean_ms << ',' << summary.max_ms << '\n';
+                std::cout << summary.name << ',' << i << ',' << summary.trial_speed[i]
+                          << ',' << summary.min_speed << ',' << summary.median_speed << ','
+                          << summary.mean_speed << ',' << summary.max_speed << '\n';
             }
         }
     }

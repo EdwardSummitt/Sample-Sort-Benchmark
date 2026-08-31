@@ -19,7 +19,7 @@ if [[ ! -f "$EXE_PATH" ]]; then
     exit 1
 fi
 
-echo "thread,name,min_ms,max_ms,mean_ms,median_ms" > "$OUT_CSV"
+echo "thread,name,min_speed,max_speed,mean_speed,median_speed" > "$OUT_CSV"
 
 for t in "${THREADS[@]}"; do
     echo "Running thread=$t" >&2
@@ -35,7 +35,7 @@ for t in "${THREADS[@]}"; do
         --csv=true)"
 
     # Input CSV format from benchmark:
-    # name,trial_idx,trial_ms,min_ms,median_ms,mean_ms,max_ms
+    # name,trial_idx,trial_speed,min_speed,median_speed,mean_speed,max_speed
     # Values are repeated for each trial, so we keep trial_idx==0 as the summary row.
     echo "$run_output" | awk -F',' -v thread="$t" '
         NR == 1 { next }
