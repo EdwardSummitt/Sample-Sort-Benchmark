@@ -47,14 +47,14 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
 Use the Python script below to run the benchmark binary across:
 
-- Cores: 1, 2, 4, 8, 16, 17, 18, 19, 20
+- Cores: 1, 2, 4, 6, ..., 40
 - Input sizes: 9 increments from 1,000,000 to 48,000,000
 - Trials per (core, size) pair: 5
 
-The script computes median speed (elements sorted per ms) from trial samples and produces two line plots:
+The script computes median speed (elements sorted per ms) from trial samples. Each graph displays speedup by dividing the median speed at each thread count by the median speed from its corresponding one-core run:
 
-- `benchmark_speed_vs_size.png`: X axis is input size, Y axis is median speed, one line per thread count.
-- `benchmark_speed_vs_threads.png`: X axis is thread count, Y axis is median speed, one line per input size.
+- `benchmark_speed_vs_size.png`: X axis is input size, Y axis is parallel-over-sequential speedup, one line per thread count.
+- `benchmark_speed_vs_threads.png`: X axis is thread count, Y axis is parallel-over-sequential speedup, one line per input size.
 
 ### Example (Windows PowerShell)
 

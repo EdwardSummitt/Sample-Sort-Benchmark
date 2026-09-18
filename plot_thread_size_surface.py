@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run HPX benchmark sweeps and generate median-speed line plots.
+"""Run HPX benchmark sweeps and generate speedup line plots.
 
 This script runs the benchmark executable across a fixed thread-count list and
 input-size list, performs 5 trials per combination, computes the median from
@@ -7,8 +7,8 @@ raw trial samples, and writes:
 
 1) raw trial CSV
 2) median summary CSV
-3) speed-vs-size line plot (one line per thread count)
-4) speed-vs-threads line plot (one line per input size)
+3) speedup-vs-size line plot (one line per thread count)
+4) speedup-vs-threads line plot (one line per input size)
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 
-THREAD_COUNTS = [1, 2, 4, 8, 16, 17, 18, 19, 20]
+THREAD_COUNTS = [1, *range(2, 41, 2)]
 
 # Nine input-size increments chosen to span small -> large while keeping runtime manageable.
 INPUT_SIZES = [
@@ -144,22 +144,22 @@ def write_median_csv(path: Path, rows: list[dict[str, float]]) -> None:
         writer.writerows(rows)
 
 
-def plot_speed_vs_size(
+def plot_speedup_vs_size(
     output_path: Path,
     thread_counts: list[int],
     input_sizes: list[int],
-    medians_by_size_thread: list[list[float]],
+    speedups_by_size_thread: list[list[float]],
 ) -> None:
-    # medians_by_size_thread is indexed [size_idx][thread_idx]
+    # speedups_by_size_thread is indexed [size_idx][thread_idx]
     fig, ax = plt.subplots(figsize=(10, 7))
 
     for thread_idx, threads in enumerate(thread_counts):
-        y = [medians_by_size_thread[size_idx][thread_idx] for size_idx in range(len(input_sizes))]
+        y = [speedups_by_size_thread[size_idx][thread_idx] for size_idx in range(len(input_sizes))]
         ax.plot(input_sizes, y, marker="o", label=f"{threads} threads")
 
     ax.set_xlabel("Input size (N)")
-    ax.set_ylabel("Median speed (elements/ms)")
-    ax.set_title("HPX Sample Sort Speed vs Input Size")
+    ax.set_ylabel("Speedup (parallel / sequential)")
+    ax.set_title("HPX Sample Sort Speedup vs Input Size")
     ax.legend(title="Cores (threads)")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -167,22 +167,22 @@ def plot_speed_vs_size(
     plt.close(fig)
 
 
-def plot_speed_vs_threads(
+def plot_speedup_vs_threads(
     output_path: Path,
     thread_counts: list[int],
     input_sizes: list[int],
-    medians_by_size_thread: list[list[float]],
+    speedups_by_size_thread: list[list[float]],
 ) -> None:
-    # medians_by_size_thread is indexed [size_idx][thread_idx]
+    # speedups_by_size_thread is indexed [size_idx][thread_idx]
     fig, ax = plt.subplots(figsize=(10, 7))
 
     for size_idx, size in enumerate(input_sizes):
-        y = medians_by_size_thread[size_idx]
+        y = speedups_by_size_thread[size_idx]
         ax.plot(thread_counts, y, marker="o", label=f"N={size:,}")
 
     ax.set_xlabel("Cores (threads)")
-    ax.set_ylabel("Median speed (elements/ms)")
-    ax.set_title("HPX Sample Sort Speed vs Thread Count")
+    ax.set_ylabel("Speedup (parallel / sequential)")
+    ax.set_title("HPX Sample Sort Speedup vs Thread Count")
     ax.legend(title="Input size")
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -192,7 +192,7 @@ def plot_speed_vs_threads(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run core/input-size sweeps and generate median speed line plots."
+        description="Run core/input-size sweeps and generate parallel-over-sequential speedup plots."
     )
     parser.add_argument(
         "--exe",
@@ -243,13 +243,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--plot-vs-size",
         type=Path,
         default=Path("benchmark_speed_vs_size.png"),
-        help="Output PNG for speed-vs-input-size line plot (one line per thread count).",
+        help="Output PNG for speedup-vs-input-size line plot (one line per thread count).",
     )
     parser.add_argument(
         "--plot-vs-threads",
         type=Path,
         default=Path("benchmark_speed_vs_threads.png"),
-        help="Output PNG for speed-vs-thread-count line plot (one line per input size).",
+        help="Output PNG for speedup-vs-thread-count line plot (one line per input size).",
     )
     return parser
 
@@ -267,7 +267,7 @@ def main() -> int:
 
     raw_rows: list[dict[str, float]] = []
     median_rows: list[dict[str, float]] = []
-    medians_by_size_thread: list[list[float]] = []
+    speedups_by_size_thread: list[list[float]] = []
 
     total_runs = len(INPUT_SIZES) * len(THREAD_COUNTS)
     run_idx = 0
@@ -314,12 +314,17 @@ def main() -> int:
                 }
             )
 
-        medians_by_size_thread.append(medians_for_size)
+        sequential_median = medians_for_size[0]
+        speedups_by_size_thread.append(
+            [median_speed / sequential_median for median_speed in medians_for_size]
+        )
 
     write_raw_csv(args.raw_csv, raw_rows)
     write_median_csv(args.median_csv, median_rows)
-    plot_speed_vs_size(args.plot_vs_size, THREAD_COUNTS, INPUT_SIZES, medians_by_size_thread)
-    plot_speed_vs_threads(args.plot_vs_threads, THREAD_COUNTS, INPUT_SIZES, medians_by_size_thread)
+    plot_speedup_vs_size(args.plot_vs_size, THREAD_COUNTS, INPUT_SIZES, speedups_by_size_thread)
+    plot_speedup_vs_threads(
+        args.plot_vs_threads, THREAD_COUNTS, INPUT_SIZES, speedups_by_size_thread
+    )
 
     print("\nFinished benchmark sweep.")
     print(f"Raw trials CSV      : {args.raw_csv}")
