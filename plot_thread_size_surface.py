@@ -425,9 +425,9 @@ def main() -> int:
     # examination or replotting without rerunning the benchmark.
     write_raw_csv(args.raw_csv, raw_rows)
     write_median_csv(args.median_csv, median_rows)
-    plot_speedup_vs_size(args.plot_vs_size, THREAD_COUNTS, INPUT_SIZES, speedups_by_size_thread)
+    plot_speedup_vs_size(args.plot_vs_size, thread_counts, INPUT_SIZES, speedups_by_size_thread)
     plot_speedup_vs_threads(
-        args.plot_vs_threads, THREAD_COUNTS, INPUT_SIZES, speedups_by_size_thread
+        args.plot_vs_threads, thread_counts, INPUT_SIZES, speedups_by_size_thread
     )
 
     print("\nFinished benchmark sweep.")
