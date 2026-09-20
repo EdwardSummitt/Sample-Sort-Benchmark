@@ -359,9 +359,9 @@ def main() -> int:
     total_runs = len(INPUT_SIZES) * len(thread_counts)
     run_idx = 0
 
-    binding_mode = "spread" if args.debug_40 else None
+    binding_mode = None
     if args.debug_40:
-        print("Debug 40-thread mode: running only the 40-thread configuration with spread binding and print-bind enabled.")
+        print("Debug 40-thread mode: running only the 40-thread configuration with print-bind enabled.")
 
     for size in INPUT_SIZES:
         medians_for_size: list[float] = []
