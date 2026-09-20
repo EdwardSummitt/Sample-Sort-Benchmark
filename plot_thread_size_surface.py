@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Run HPX benchmark sweeps and generate speedup line plots.
 
-This script runs the benchmark executable across a fixed thread-count list and
-input-size list, performs 5 trials per combination, computes the median from
-raw trial samples, and writes:
+This script is the orchestration layer between the compiled HPX benchmark binary
+and the final plots that summarize its performance. It does four main things:
 
-1) raw trial CSV
-2) median summary CSV
-3) speedup-vs-size line plot (one line per thread count)
-4) speedup-vs-threads line plot (one line per input size)
+1. It locates the benchmark executable.
+2. It runs a Cartesian sweep over several input sizes and thread counts.
+3. It converts the raw CSV output into median speeds and speedup ratios.
+4. It saves CSV files and plots for later analysis.
+
+The end result is a pair of charts showing how performance changes as either the
+input size or the thread count varies.
 """
 
 from __future__ import annotations
@@ -23,9 +25,16 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 
+# The benchmark intentionally sweeps a specific set of thread counts.
+# The list begins with 1 and then includes every even value up to 40.
+# This means the set is: 1, 2, 4, 6, 8, ..., 40.
+# This is useful because it produces a smooth enough curve to reveal scaling
+# behavior without exploding the number of benchmark executions.
 THREAD_COUNTS = [1, *range(2, 41, 2)]
 
-# Nine input-size increments chosen to span small -> large while keeping runtime manageable.
+# Nine input sizes are used to span a wide dynamic range while keeping the total
+# runtime manageable. The sizes grow by roughly powers of two and a few mixed
+# intermediate values so the benchmark covers both small and large workloads.
 INPUT_SIZES = [
     1_000_000,
     2_000_000,
@@ -38,10 +47,19 @@ INPUT_SIZES = [
     48_000_000,
 ]
 
+# This is the exact CSV header emitted by the C++ benchmark for each row.
+# The Python script relies on this exact string to identify where the useful data
+# starts inside the benchmark output, because the program prints other text first.
 CSV_HEADER = "name,trial_idx,trial_speed,min_speed,median_speed,mean_speed,max_speed"
 
 
 def resolve_default_executable() -> Path:
+    """Find a likely benchmark executable in the repository.
+
+    The project may build the binary under different paths depending on the OS,
+    generator, or build configuration. This function checks a short list of common
+    locations and returns the first one that exists.
+    """
     candidates = [
         Path("build/Release/test_hpx.exe"),
         Path("build/test_hpx.exe"),
@@ -58,6 +76,12 @@ def resolve_default_executable() -> Path:
 
 
 def extract_csv_rows(output: str) -> list[dict[str, str]]:
+    """Parse benchmark output and extract the CSV rows that contain timed results.
+
+    The C++ benchmark prints a text banner and then emits a CSV section beginning
+    with a fixed header. This function scans the output line by line, locates the
+    header, and then feeds the remainder into Python's csv.DictReader.
+    """
     lines = [line.strip() for line in output.splitlines() if line.strip()]
     start_idx = -1
     for idx, line in enumerate(lines):
@@ -83,7 +107,15 @@ def run_one_benchmark(
     verify: bool,
     algorithm_name: str,
     hpx_bind_none: bool,
+    print_bind: bool = False,
+    binding_mode: str | None = None,
 ) -> list[float]:
+    """Execute one benchmark configuration and return the raw measured trial speeds.
+
+    The benchmark binary itself is responsible for sorting the data and measuring
+    throughput. This function just assembles the correct CLI arguments for that
+    process and extracts the timing results from its CSV output.
+    """
     cmd = [
         str(exe_path),
         f"--threads={threads}",
@@ -95,8 +127,12 @@ def run_one_benchmark(
         f"--verify={'true' if verify else 'false'}",
         "--csv=true",
     ]
-    if hpx_bind_none:
+    if binding_mode is not None:
+        cmd.append(f"--hpx:bind={binding_mode}")
+    elif hpx_bind_none:
         cmd.append("--hpx:bind=none")
+    if print_bind:
+        cmd.append("--hpx:print-bind")
 
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
@@ -125,6 +161,12 @@ def run_one_benchmark(
 
 
 def write_raw_csv(path: Path, rows: list[dict[str, float]]) -> None:
+    """Save all raw trial measurements to a CSV file.
+
+    This is the most granular data artifact produced by the benchmark. It keeps
+    every measured trial speed at every thread count and input size, which is
+    useful for further analysis or debugging outliers.
+    """
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
@@ -135,6 +177,11 @@ def write_raw_csv(path: Path, rows: list[dict[str, float]]) -> None:
 
 
 def write_median_csv(path: Path, rows: list[dict[str, float]]) -> None:
+    """Save the median throughput for each (threads, size) pair.
+
+    This is the main file used for plotting. It represents the central tendency of
+    each benchmark configuration while reducing the impact of noisy outlier runs.
+    """
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
@@ -150,7 +197,13 @@ def plot_speedup_vs_size(
     input_sizes: list[int],
     speedups_by_size_thread: list[list[float]],
 ) -> None:
-    # speedups_by_size_thread is indexed [size_idx][thread_idx]
+    """Plot speedup as a function of input size, one line per thread count.
+
+    The speedups_by_size_thread matrix is organized as [size_idx][thread_idx]. For
+    each thread count, we take the speedup values across all sizes and plot them on
+    the same chart. This lets us see how much the parallel algorithm improves over
+    the one-thread baseline as the dataset grows.
+    """
     fig, ax = plt.subplots(figsize=(10, 7))
 
     for thread_idx, threads in enumerate(thread_counts):
@@ -173,7 +226,12 @@ def plot_speedup_vs_threads(
     input_sizes: list[int],
     speedups_by_size_thread: list[list[float]],
 ) -> None:
-    # speedups_by_size_thread is indexed [size_idx][thread_idx]
+    """Plot speedup as a function of thread count, one line per input size.
+
+    This is the more traditional performance-scaling plot. Each series represents
+    a fixed problem size; the x-axis is concurrency and the y-axis is the speedup
+    relative to the single-thread baseline for that same input size.
+    """
     fig, ax = plt.subplots(figsize=(10, 7))
 
     for size_idx, size in enumerate(input_sizes):
@@ -191,6 +249,12 @@ def plot_speedup_vs_threads(
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    """Define the command-line interface for the benchmark driver.
+
+    The benchmark is intentionally flexible: it can run a full sweep, a focused
+    debug case, or any custom input size/thread count combination. This parser is
+    the public interface for that functionality.
+    """
     parser = argparse.ArgumentParser(
         description="Run core/input-size sweeps and generate parallel-over-sequential speedup plots."
     )
@@ -228,6 +292,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Pass --hpx:bind=none to permit oversubscription-style thread counts.",
     )
     parser.add_argument(
+        "--print-bind",
+        action="store_true",
+        default=False,
+        help="Print HPX thread binding information for each benchmark run.",
+    )
+    parser.add_argument(
+        "--debug-40",
+        action="store_true",
+        default=False,
+        help="Run only the 40-thread configuration and print the HPX bind layout.",
+    )
+    parser.add_argument(
         "--raw-csv",
         type=Path,
         default=Path("benchmark_raw_trials.csv"),
@@ -242,19 +318,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--plot-vs-size",
         type=Path,
-        default=Path("benchmark_speed_vs_size.png"),
+        default=Path("benchmark_speedup_vs_size.png"),
         help="Output PNG for speedup-vs-input-size line plot (one line per thread count).",
     )
     parser.add_argument(
         "--plot-vs-threads",
         type=Path,
-        default=Path("benchmark_speed_vs_threads.png"),
+        default=Path("benchmark_speedup_vs_threads.png"),
         help="Output PNG for speedup-vs-thread-count line plot (one line per input size).",
     )
     return parser
 
 
 def main() -> int:
+    """Run the full benchmark sweep and generate the summary plots.
+
+    This is the core control loop of the script. For each input size, it loops over
+    the requested thread counts, invokes the benchmark executable, stores the raw
+    measurements, computes the median, converts the medians into speedups relative
+    to the single-thread baseline, and finally writes the output files.
+    """
     parser = build_arg_parser()
     args = parser.parse_args()
 
@@ -269,12 +352,20 @@ def main() -> int:
     median_rows: list[dict[str, float]] = []
     speedups_by_size_thread: list[list[float]] = []
 
-    total_runs = len(INPUT_SIZES) * len(THREAD_COUNTS)
+    # The debug mode intentionally overrides the full sweep and only exercises the
+    # 40-thread benchmark. This is useful when investigating outliers or scheduler
+    # placement effects at a single concurrency point.
+    thread_counts = [40] if args.debug_40 else THREAD_COUNTS
+    total_runs = len(INPUT_SIZES) * len(thread_counts)
     run_idx = 0
+
+    binding_mode = "spread" if args.debug_40 else None
+    if args.debug_40:
+        print("Debug 40-thread mode: running only the 40-thread configuration with spread binding and print-bind enabled.")
 
     for size in INPUT_SIZES:
         medians_for_size: list[float] = []
-        for threads in THREAD_COUNTS:
+        for threads in thread_counts:
             run_idx += 1
             print(
                 f"[{run_idx}/{total_runs}] Running size={size}, threads={threads}...",
@@ -291,8 +382,14 @@ def main() -> int:
                 verify=args.verify,
                 algorithm_name=args.algorithm,
                 hpx_bind_none=args.hpx_bind_none,
+                print_bind=args.print_bind or args.debug_40,
+                binding_mode=binding_mode,
             )
 
+            # The median is the most stable single-number summary for noisy timing
+            # data. A single poor scheduling decision or a transient OS artifact can
+            # distort the mean, but the median is much less sensitive to those
+            # extremes.
             median_speed = float(statistics.median(trial_speeds))
             medians_for_size.append(median_speed)
 
@@ -314,11 +411,18 @@ def main() -> int:
                 }
             )
 
+        # Speedup is computed relative to the single-thread median for the same
+        # input size. This makes the plots comparable across different input sizes,
+        # because each series is normalized to its own baseline rather than to an
+        # arbitrary absolute reference.
         sequential_median = medians_for_size[0]
         speedups_by_size_thread.append(
             [median_speed / sequential_median for median_speed in medians_for_size]
         )
 
+    # Save the raw per-trial data and the median summary before plotting. These
+    # CSV files are valuable because they preserve all measured data for later
+    # examination or replotting without rerunning the benchmark.
     write_raw_csv(args.raw_csv, raw_rows)
     write_median_csv(args.median_csv, median_rows)
     plot_speedup_vs_size(args.plot_vs_size, THREAD_COUNTS, INPUT_SIZES, speedups_by_size_thread)
