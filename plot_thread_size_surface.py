@@ -135,6 +135,14 @@ def run_one_benchmark(
         cmd.append("--hpx:print-bind")
 
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if print_bind:
+        if result.stdout:
+            print("--- benchmark stdout ---")
+            print(result.stdout)
+        if result.stderr:
+            print("--- benchmark stderr ---")
+            print(result.stderr)
+
     if result.returncode != 0:
         raise RuntimeError(
             "Benchmark command failed.\n"
