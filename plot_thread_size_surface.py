@@ -125,7 +125,7 @@ def run_one_benchmark(
         f"--verify={'true' if verify else 'false'}",
         "--csv=true",
     ]
-    cmd.append("--hpx:bind=balanced")
+    cmd.append("--hpx:bind=none")
     if print_bind:
         cmd.append("--hpx:print-bind")
 
