@@ -30,7 +30,7 @@ import matplotlib.pyplot as plt
 # This means the set is: 1, 2, 4, 6, 8, ..., 32.
 # This is useful because it produces a smooth enough curve to reveal scaling
 # behavior without exploding the number of benchmark executions.
-THREAD_COUNTS = [1, *range(2, 33, 2)]
+THREAD_COUNTS = [1, *range(2, 41, 2)]
 
 # Nine input sizes are used to span a wide dynamic range while keeping the total
 # runtime manageable. The sizes grow by roughly powers of two and a few mixed
