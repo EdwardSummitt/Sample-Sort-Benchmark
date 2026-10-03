@@ -26,11 +26,11 @@ import matplotlib.pyplot as plt
 
 
 # The benchmark intentionally sweeps a specific set of thread counts.
-# The list begins with 1 and then includes every even value up to 50.
-# This means the set is: 1, 2, 4, 6, 8, ..., 40, 42, ..., 50.
+# The list begins with 1 and then includes every even value up to 32.
+# This means the set is: 1, 2, 4, 6, 8, ..., 32.
 # This is useful because it produces a smooth enough curve to reveal scaling
 # behavior without exploding the number of benchmark executions.
-THREAD_COUNTS = [1, *range(2, 51, 2)]
+THREAD_COUNTS = [1, *range(2, 33, 2)]
 
 # Nine input sizes are used to span a wide dynamic range while keeping the total
 # runtime manageable. The sizes grow by roughly powers of two and a few mixed
@@ -106,9 +106,7 @@ def run_one_benchmark(
     distribution: str,
     verify: bool,
     algorithm_name: str,
-    hpx_bind_none: bool,
     print_bind: bool = False,
-    binding_mode: str | None = None,
 ) -> list[float]:
     """Execute one benchmark configuration and return the raw measured trial speeds.
 
@@ -127,10 +125,7 @@ def run_one_benchmark(
         f"--verify={'true' if verify else 'false'}",
         "--csv=true",
     ]
-    if binding_mode is not None:
-        cmd.append(f"--hpx:bind={binding_mode}")
-    elif hpx_bind_none:
-        cmd.append("--hpx:bind=none")
+    cmd.append("--hpx:bind=balanced")
     if print_bind:
         cmd.append("--hpx:print-bind")
 
@@ -294,12 +289,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Algorithm name to extract from CSV output.",
     )
     parser.add_argument(
-        "--hpx-bind-none",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Pass --hpx:bind=none to permit oversubscription-style thread counts.",
-    )
-    parser.add_argument(
         "--print-bind",
         action="store_true",
         default=False,
@@ -367,7 +356,6 @@ def main() -> int:
     total_runs = len(INPUT_SIZES) * len(thread_counts)
     run_idx = 0
 
-    binding_mode = None
     if args.debug_40:
         print("Debug 40-thread mode: running only the 40-thread configuration with print-bind enabled.")
 
@@ -389,9 +377,7 @@ def main() -> int:
                 distribution=args.distribution,
                 verify=args.verify,
                 algorithm_name=args.algorithm,
-                hpx_bind_none=args.hpx_bind_none,
                 print_bind=args.print_bind or args.debug_40,
-                binding_mode=binding_mode,
             )
 
             # The median is the most stable single-number summary for noisy timing
