@@ -89,6 +89,7 @@ Useful overrides:
 - `MODULES_TO_LOAD="gcc cmake python/3.11" ./run_all_linux_cluster.sh`
 - `BUILD_JOBS=32 ./run_all_linux_cluster.sh`
 - `RECREATE_VENV=1 ./run_all_linux_cluster.sh`
+- `UPDATE_VCPKG=0 ./run_all_linux_cluster.sh` (pins the current vcpkg/HPX version; by default the script pulls the latest vcpkg on every run and rebuilds HPX only if vcpkg changed)
 
 Any extra flags are forwarded to `plot_thread_size_surface.py`:
 

@@ -60,6 +60,32 @@ if [[ ! -x "${VCPKG_DIR}/vcpkg" ]]; then
   "${VCPKG_DIR}/bootstrap-vcpkg.sh"
 fi
 
+if [[ "${UPDATE_VCPKG:-1}" == "1" ]]; then
+  if ! git -C "${VCPKG_DIR}" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Warning: ${VCPKG_DIR} is not a git clone; skipping vcpkg update" >&2
+  else
+    log "Checking for vcpkg updates (set UPDATE_VCPKG=0 to pin the current version)"
+    OLD_VCPKG_REV="$(git -C "${VCPKG_DIR}" rev-parse HEAD)"
+    if git -C "${VCPKG_DIR}" pull --ff-only; then
+      NEW_VCPKG_REV="$(git -C "${VCPKG_DIR}" rev-parse HEAD)"
+      if [[ "${OLD_VCPKG_REV}" != "${NEW_VCPKG_REV}" ]]; then
+        log "vcpkg updated; re-bootstrapping and forcing package reinstall"
+        "${VCPKG_DIR}/bootstrap-vcpkg.sh"
+        # Force vcpkg to reinstall packages so the newer HPX port is built
+        rm -rf "${BUILD_DIR}/vcpkg_installed"
+      else
+        log "vcpkg already up to date"
+      fi
+    else
+      echo "Warning: vcpkg update failed (offline?); continuing with current checkout" >&2
+    fi
+  fi
+fi
+
+HPX_PORT_VERSION="$(grep -m1 -E '"version(-[a-z]+)?"' "${VCPKG_DIR}/ports/hpx/vcpkg.json" 2>/dev/null || true)"
+log "vcpkg commit: $(git -C "${VCPKG_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+log "HPX port version: ${HPX_PORT_VERSION:-unknown}"
+
 log "Configuring CMake"
 cmake -S . -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
