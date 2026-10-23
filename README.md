@@ -112,7 +112,7 @@ chmod +x ./run_thread_scatter.sh
 ```
 
 Both wrappers run the shared `plot_thread_scatter.py` driver at one input size
-(default 8,000,000 elements) and thread counts 1, 2, 4, ..., 32. By default, each
+(default 8,000,000 elements) and thread counts 1, 2, 4, ..., 40. By default, each
 configuration has one untimed warmup and five timed trials; every timed trial
 appears as a scatter point. Override the element count, trial count, warmups, or
 output paths with `--size`, `--trials`, `--warmup`, `--output-csv`, and

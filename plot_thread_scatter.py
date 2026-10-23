@@ -14,13 +14,13 @@ from plot_thread_size_surface import run_one_benchmark
 
 
 DEFAULT_INPUT_SIZE = 8_000_000
-THREAD_COUNTS = [1, *range(2, 33, 2)]
+THREAD_COUNTS = [1, *range(2, 41, 2)]
 ALGORITHM_NAME = "hpx::sample_sort"
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Benchmark HPX sample sort at one input size across thread counts 1, 2, 4, ..., 32."
+        description="Benchmark HPX sample sort at one input size across thread counts 1, 2, 4, ..., 40."
     )
     parser.add_argument(
         "--size",
