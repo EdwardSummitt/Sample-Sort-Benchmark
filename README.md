@@ -96,3 +96,31 @@ Any extra flags are forwarded to `plot_thread_size_surface.py`:
 ```bash
 ./run_all_linux_cluster.sh --distribution uniform --warmup 0
 ```
+
+## Thread-Count Scatterplot
+
+After building `test_hpx` and installing the Python plotting requirements, run
+the focused sweep using either platform wrapper:
+
+```bash
+# Linux/macOS
+chmod +x ./run_thread_scatter.sh
+./run_thread_scatter.sh
+
+# Windows PowerShell
+.\run_thread_scatter.ps1
+```
+
+Both wrappers run the shared `plot_thread_scatter.py` driver at one input size
+(default 8,000,000 elements) and thread counts 1, 2, 4, ..., 32. By default, each
+configuration has one untimed warmup and five timed trials; every timed trial
+appears as a scatter point. Override the element count, trial count, warmups, or
+output paths with `--size`, `--trials`, `--warmup`, `--output-csv`, and
+`--output-plot` (e.g. `./run_thread_scatter.sh --size 16000000`). Set `EXE_PATH` and `PYTHON_BIN`
+to select the benchmark executable and Python interpreter. When invoking the
+Python driver directly, use `--exe` to select the executable.
+
+Outputs:
+
+- `benchmark_thread_trials.csv`
+- `benchmark_thread_scatter.png`
